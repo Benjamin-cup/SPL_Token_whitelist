@@ -91,7 +91,7 @@ pub mod examroom_ai_token {
         }
 
         let length = addresses.len();
-        let counter = config.counter as usize;
+        let counter = airdrop.counter as usize;
 
         
         if length + counter > MAX_LEN {
@@ -205,7 +205,7 @@ pub struct Initialize<'info> {
     pub to_ata: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
     #[account(init,payer = authority,space=10240)]
-    airdrop: ProgramAccount<'info, Config>,
+    airdrop: ProgramAccount<'info, Airdrop>,
     #[account(mut, signer)]
     authority: AccountInfo<'info>,
     #[account(zero)]
@@ -259,7 +259,7 @@ impl<'info> AddMintTokens<'info> {
 #[derive(Accounts)]
 pub struct AddWhitelistAddresses<'info> {
     #[account(mut, has_one = authority)]
-    airdrop: ProgramAccount<'info, Config>,
+    airdrop: ProgramAccount<'info, Airdrop>,
     #[account(mut)]
     whitelist: AccountLoader<'info, Whitelist>,
     authority: Signer<'info>,
@@ -268,7 +268,7 @@ pub struct AddWhitelistAddresses<'info> {
 #[derive(Accounts)]
 pub struct ResetWhitelistCounter<'info> {
     #[account(mut, has_one = authority)]
-    config: ProgramAccount<'info, Config>,
+    airdrop: ProgramAccount<'info, Airdrop>,
     authority: Signer<'info>,
 }
 #[account(zero_copy)]
@@ -279,7 +279,7 @@ pub struct Whitelist {
 #[derive(Accounts)]
 pub struct UpdateAirdrop<'info> {
     #[account(mut, has_one = authority)]
-    airdrop: ProgramAccount<'info, Config>,
+    airdrop: ProgramAccount<'info, Airdrop>,
     authority: Signer<'info>,
 }
 
@@ -288,7 +288,7 @@ pub struct UpdateAirdrop<'info> {
 pub struct SendMintToken<'info> {
 
     #[account(mut)]
-    airdrop: ProgramAccount<'info, Config>,
+    airdrop: ProgramAccount<'info, Airdrop>,
     #[account(mut, signer)]
     payer: AccountInfo<'info>,
     #[account(mut)]
