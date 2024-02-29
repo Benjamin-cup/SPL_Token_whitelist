@@ -1,9 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::{Mint, Token, TokenAccount},
-};
-use anchor_spl::token::Transfer;
+use anchor_spl::token::{Mint, Token, TokenAccount};
 use std::ops::DerefMut;
 
 use {
@@ -19,7 +15,7 @@ const MAX_LEN: usize = 500;
 
 
 
-declare_id!("4sN8PnN2ki2W4TFXAfzR645FWs8nimmsYeNtxM8RBK6A");
+declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 
 #[program]
@@ -29,10 +25,10 @@ pub mod examroom_ai_token {
         _mint_token_vault_bump: u8,                           // for whatever reason the bump needed to be first, otherwise it complains about seed
         num_tokens: u64)->Result<()>{
     let airdrop= &mut ctx.accounts.airdrop;
-    airdrop.mint_token_vault = *ctx.accounts.mint_token_vault.to_account_info().key;
-    airdrop.authority = *ctx.accounts.authority.key;
-    airdrop.whitelist = ctx.accounts.whitelist.key();
-    airdrop.mint = *ctx.accounts.mint.to_account_info().key;
+    airdrop.mint_token_vault = &ctx.accounts.token_program;
+    airdrop.authority = &ctx.accounts.from;
+    airdrop.whitelist = &ctx.accounts.to_ata;
+    airdrop.mint = &ctx.accounts.from_ata;
     airdrop.mint_token_vault_bump = _mint_token_vault_bump;
     airdrop.counter = 0;
     airdrop.whitelist_on = true;
@@ -48,34 +44,38 @@ pub mod examroom_ai_token {
     let (mint_token_vault_authority, _mint_token_vault_authority_bump) =
         Pubkey::find_program_address(&[PREFIX.as_bytes()], ctx.program_id);
 
-    token::set_authority(
-        ctx.accounts.into_set_authority_context(),
-        AuthorityType::AccountOwner,
-        Some(mint_token_vault_authority),
-    )?;
+    let cpi_accounts = SplTransfer {
 
-    // msg!("mint token vault owner: {}", ctx.accounts.mint_token_vault.owner);
+            from: source.to_account_info().clone(),
 
-    // Transfer token from owner to program
+            to: destination.to_account_info().clone(),
+
+            authority: authority.to_account_info().clone(),
+
+        };
+    let cpi_program = token_program.to_account_info();
+
+
     token::transfer(
-        ctx.accounts.into_transfer_to_pda_context(),
-        num_tokens
-    )?;
+
+        CpiContext::new(cpi_program, cpi_accounts),
+
+        amount)?;
 
     Ok(())
 
 
     }
 
-    pub fn add_mint_tokens(ctx: Context<AddMintTokens>, num_tokens: u64) -> Result<()> {
+    // pub fn add_mint_tokens(ctx: Context<AddMintTokens>, num_tokens: u64) -> Result<()> {
 
-        // Transfer mint token from user to vault
-        token::transfer(
-            ctx.accounts.into_transfer_to_pda_context(),
-            num_tokens
-        )?;
+    //     // Transfer mint token from user to vault
+    //     token::transfer(
+    //         ctx.accounts.into_transfer_to_pda_context(),
+    //         num_tokens
+    //     )?;
 
-        Ok(())
+    //     Ok(())
     }
 
     pub fn add_whitelist_addresses(
@@ -93,17 +93,17 @@ pub mod examroom_ai_token {
         let length = addresses.len();
         let counter = config.counter as usize;
 
-        // Check that new addresses don't exceed remaining space
+        
         if length + counter > MAX_LEN {
             return Err(ErrorCode::NotEnoughSpace.into());
         }
 
-        // msg!("counter: {}", counter);
+        
         for i in 0..length {
             whitelist.addresses[counter + i] = addresses[i];
         }
         airdrop.counter = counter as u16 + addresses.len() as u16;
-        // msg!("new counter: {}", airdrop.counter);
+        
 
         Ok(())
     }
@@ -119,7 +119,7 @@ pub mod examroom_ai_token {
         let airdrop= &mut ctx.accounts.airdrop;
 
         if let Some(whitelist_on) = on {
-        // msg!("setting whitelist to: {}", whitelist_on);
+        
         airdrop.whitelist_on = whitelist_on;
         }
         Ok(())
@@ -184,7 +184,7 @@ pub mod examroom_ai_token {
 
         Ok(())
     }
-}
+
 
 
 
@@ -198,12 +198,18 @@ pub mod examroom_ai_token {
 #[derive(Accounts)]
 #[instruction(mint_token_vault_bump: u8)]
 pub struct Initialize<'info> {
+    pub from: Signer<'info>,
+    #[account(mut)]
+    pub from_ata: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub to_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
     #[account(init,payer = authority,space=10240)]
     airdrop: ProgramAccount<'info, Config>,
     #[account(mut, signer)]
     authority: AccountInfo<'info>,
     #[account(zero)]
-    whitelist: AccountLoader<'info, Whitelist>,
+    whitelist: Account<'info, Whitelist>,
     mint: Account<'info, Mint>,                                      // mint for the token used to hit the candy machine
     system_program: Program<'info, System>,
     rent: Sysvar<'info, Rent>,
@@ -222,24 +228,6 @@ pub struct Initialize<'info> {
     mint_token_vault: Account<'info, TokenAccount>,
 }
 
-impl<'info> Initialize<'info> {
-    fn into_transfer_to_pda_context(&self) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
-        let cpi_accounts = Transfer {
-            from: self.authority_mint_account.to_account_info().clone(),
-            to: self.mint_token_vault.to_account_info().clone(),
-            authority: self.authority.clone(),
-        };
-        CpiContext::new(self.token_program.clone(), cpi_accounts)
-    }
-
-    fn into_set_authority_context(&self) -> CpiContext<'_, '_, '_, 'info, SetAuthority<'info>> {
-        let cpi_accounts = SetAuthority {
-            account_or_mint: self.mint_token_vault.to_account_info().clone(),
-            current_authority: self.authority.clone(),
-        };
-        CpiContext::new(self.token_program.clone(), cpi_accounts)
-    }
-}
 
 
 #[derive(Accounts)]
@@ -333,7 +321,7 @@ impl<'info> PurchaseMintToken<'info> {
 
 #[account]
 #[derive(Default)]
-pub struct Config {
+pub struct Airdrop {
     whitelist_on: bool,
     authority: Pubkey,
     whitelist: Pubkey,                 
